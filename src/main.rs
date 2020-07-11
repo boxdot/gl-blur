@@ -19,7 +19,6 @@ fn main() {
         .with_transparent(true);
     let windowed_context = ContextBuilder::new().build_windowed(wb, &el).unwrap();
 
-    // let _windowed_context = unsafe { windowed_context.make_current().unwrap() };
     let windowed_context = unsafe { windowed_context.make_current().unwrap() };
 
     let gl = load(&windowed_context);
@@ -57,25 +56,10 @@ fn load(gl_context: &glutin::Context<PossiblyCurrent>) -> gl::Gl {
     };
     println!("OpenGL version {}", version);
 
+    let vs = create_shader(&gl, gl::VERTEX_SHADER, VS_SRC).unwrap();
+    let fs = create_shader(&gl, gl::FRAGMENT_SHADER, FS_SRC).unwrap();
+
     unsafe {
-        let vs = gl.CreateShader(gl::VERTEX_SHADER);
-        gl.ShaderSource(
-            vs,
-            1,
-            [VS_SRC.as_ptr() as *const _].as_ptr(),
-            std::ptr::null(),
-        );
-        gl.CompileShader(vs);
-
-        let fs = gl.CreateShader(gl::FRAGMENT_SHADER);
-        gl.ShaderSource(
-            fs,
-            1,
-            [FS_SRC.as_ptr() as *const _].as_ptr(),
-            std::ptr::null(),
-        );
-        gl.CompileShader(fs);
-
         let program = gl.CreateProgram();
         gl.AttachShader(program, vs);
         gl.AttachShader(program, fs);
@@ -121,6 +105,37 @@ fn load(gl_context: &glutin::Context<PossiblyCurrent>) -> gl::Gl {
     }
 
     gl
+}
+
+fn create_shader(
+    gl: &gl::Gl,
+    kind: gl::types::GLuint,
+    source: &[u8],
+) -> Result<gl::types::GLuint, String> {
+    unsafe {
+        let id = gl.CreateShader(kind);
+        gl.ShaderSource(
+            id,
+            1,
+            [source.as_ptr() as *const _].as_ptr(),
+            std::ptr::null(),
+        );
+        gl.CompileShader(id);
+
+        let mut success = 1;
+        gl.GetShaderiv(id, gl::COMPILE_STATUS, &mut success);
+        if success == 0 {
+            let mut len = 0;
+            gl.GetShaderiv(id, gl::INFO_LOG_LENGTH, &mut len);
+
+            let mut buffer: Vec<u8> = Vec::with_capacity(len as usize);
+            gl.GetShaderInfoLog(id, len, std::ptr::null_mut(), buffer.as_mut_ptr() as *mut _);
+            buffer.set_len(len as usize);
+            Err(String::from_utf8_unchecked(buffer))
+        } else {
+            Ok(id)
+        }
+    }
 }
 
 pub fn draw_frame(gl: &gl::Gl, color: [f32; 4]) {
